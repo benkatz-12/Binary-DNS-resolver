@@ -1,8 +1,11 @@
 import socket
-import binascii
+import struct, binascii
 
 def udp_dns(ip, port, query):
     header = b'fedc01000001000000000000'
+    st_header = struct.pack('!I', 0xfedc0100)
+    st_header += struct.pack('!I', 0x00010000)
+    st_header += struct.pack('!I', 0x00000000)
 
     #QUESTION:
     question = b''
