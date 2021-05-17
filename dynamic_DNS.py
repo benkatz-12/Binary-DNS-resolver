@@ -3,8 +3,8 @@ import struct, binascii
 
 def udp_dns(ip, port, query):
     header = b'fedc01000001000000000000'
-    st_header = struct.pack('!I', 0xfedc0100)
-    st_header += struct.pack('!I', 0x00010000)
+    st_header = struct.pack('!I', 0xfedc0100) #1 question
+    st_header += struct.pack('!I', 0x00010000) #recursive lookup
     st_header += struct.pack('!I', 0x00000000)
 
     #QUESTION:
@@ -12,7 +12,6 @@ def udp_dns(ip, port, query):
     split = query.split('.')
     for part in split:
         part_bits = part.encode('ascii')
-        #length = f'{len(part_bits):02}'.encode('ascii') #get length of bytes, pad it to 2 bytes and encode
         length = hex(len(part_bits)).encode('ascii')
         if len(length) == 3:
             length = length[2:].zfill(2)
@@ -24,9 +23,9 @@ def udp_dns(ip, port, query):
     null = b'00' #null terminator at the end of the QNAME section
     header += null
 
-    qtype = b'0005' # (5) for CNAME records
+    #qtype = b'0005' # (5) for CNAME records
     #qtype = b'000f' # (15) for MX records
-    #qtype = b'0001' #QTYPE:  (1) for A records
+    qtype = b'0001' #QTYPE:  (1) for A records
     header += qtype
  
 
@@ -50,6 +49,7 @@ def udp_dns(ip, port, query):
                 break
     sock.close()
     #return format_hex(binascii.hexlify(qfull).decode("utf-8"))
+    parse(binascii.hexlify(data).decode("utf-8"))
     return format_hex(binascii.hexlify(data).decode("utf-8"))
 
     
@@ -59,14 +59,41 @@ def format_hex(hex):
     pairs = [" ".join(octets[i:i+2]) for i in range(0, len(octets), 2)]
     return "\n".join(pairs)
 
+def parse(data):
+    #A = [data[i:i+1] for i in range(len(data))]
+    response = {}
+
+    #parse header
+    header = {}
+    header["identifier"] = data[0:4]
+    flags = bin(int(data[4:8], 16))[2:]
+    header["QR"] = flags[0] #0 for query 1 for header
+    header["OPcode"] = int(flags[1:5])
+    header["AA"] = flags[5]
+    header["TC"] = flags[6]
+    header["RD"] = flags[7]
+    header["RA"] = flags[8]
+    header["Rcode"] = int(flags[12:17])
+    header["QDcount"] = int(data[8:12])
+    header["ANcount"] = int(data[12:16])
+    header["NScount"] = int(data[16:20])
+    header["ARcount"] = int(data[20:24])
+    NUM_ANSWERS = header["ANcount"]
+
+    #parse answers
+    answer = {}
+    for i in range(NUM_ANSWERS):
+        answer[""] = 
+    response["header"] = header
+    print(response)
 
 
 if __name__ == "__main__":
     ip = "8.8.8.8"
-    #query = "saep.io"
-    query = "test.quantreads.com"
+    query = "saep.io"
+    #query = "test.quantreads.com"
     port = 53
-    print(udp_dns(ip, port, query))
+    udp_dns(ip, port, query)
 
 
 ###   A Type DNS Lookup Request
