@@ -83,7 +83,7 @@ def parse(data):
     #parse answers
     answer = {}
     for i in range(NUM_ANSWERS):
-        answer[""] = 
+        answer["not it"] = 1
     response["header"] = header
     print(response)
 
