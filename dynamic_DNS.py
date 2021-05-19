@@ -60,31 +60,61 @@ def format_hex(hex):
     return "\n".join(pairs)
 
 def parse(data):
-    #A = [data[i:i+1] for i in range(len(data))]
     response = {}
 
     #parse header
     header = {}
-    header["identifier"] = data[0:4]
+    header["IDENT"] = data[0:4]
     flags = bin(int(data[4:8], 16))[2:]
     header["QR"] = flags[0] #0 for query 1 for header
-    header["OPcode"] = int(flags[1:5])
+    header["OPCODE"] = int(flags[1:5])
     header["AA"] = flags[5]
     header["TC"] = flags[6]
     header["RD"] = flags[7]
     header["RA"] = flags[8]
-    header["Rcode"] = int(flags[12:17])
-    header["QDcount"] = int(data[8:12])
-    header["ANcount"] = int(data[12:16])
-    header["NScount"] = int(data[16:20])
-    header["ARcount"] = int(data[20:24])
-    NUM_ANSWERS = header["ANcount"]
+    header["RCODE"] = int(flags[12:17])
+    header["QDCOUNT"] = int(data[8:12])
+    header["ANCOUNT"] = int(data[12:16])
+    header["NSCOUNT"] = int(data[16:20])
+    header["ARCOUNT"] = int(data[20:24])
+    response["header"] = header
+    NUM_ANSWERS = header["ANCOUNT"]
+    NUM_QUESTIONS = header["QDCOUNT"]
+    CUR_BYTE = 24
 
-    #parse answers
+    #parse question section
+    question = {}
+    for j in range(NUM_QUESTIONS):
+        question["QNAME"] = ''
+        CUR_BYTE = CUR_BYTE * (j+1)
+        LEN_SECTION = int(data[CUR_BYTE : CUR_BYTE+2])
+        CUR_BYTE += 2
+        while True:
+            question["QNAME"] += bytes.fromhex(data[CUR_BYTE : CUR_BYTE + LEN_SECTION*2]).decode("ascii")
+            CUR_BYTE += LEN_SECTION*2
+            LEN_SECTION = int(data[CUR_BYTE : CUR_BYTE+2])
+            CUR_BYTE += 2
+            if LEN_SECTION == 0:
+                break
+            question["QNAME"] += '.'
+        question["QTYPE"] = int(data[CUR_BYTE : CUR_BYTE + 4])
+        CUR_BYTE += 4
+        question["QCLASS"] = int(data[CUR_BYTE : CUR_BYTE + 4])
+        CUR_BYTE += 4
+        response["question-" + str(j)] = question
+
+
+    #parse answerss
     answer = {}
     for i in range(NUM_ANSWERS):
-        answer["not it"] = 1
-    response["header"] = header
+        print(data[CUR_BYTE])
+        answer["name pointer"] = data[CUR_BYTE]
+        CUR_BYTE += 1
+        
+        
+        response["answer-" + str(i)] = answer
+    
+    
     print(response)
 
 
