@@ -24,8 +24,8 @@ def udp_dns(ip, port, query):
     header += null
 
     #qtype = b'0005' # (5) for CNAME records
-    #qtype = b'000f' # (15) for MX records
-    qtype = b'0001' #QTYPE:  (1) for A records
+    qtype = b'000f' # (15) for MX records
+    #qtype = b'0001' #QTYPE:  (1) for A records
     header += qtype
  
 
@@ -42,6 +42,7 @@ def udp_dns(ip, port, query):
         sock.send(qfull)
     except Exception as e:
         print(f"Exception - {e}")
+        return -1
     data = sock.recv(1024)
     while(1):
         if data is not None:
@@ -86,7 +87,7 @@ def parse(data):
     question = {}
     for j in range(NUM_QUESTIONS):
         question["QNAME"] = ''
-        CUR_BYTE = CUR_BYTE * (j+1)
+        #CUR_BYTE = CUR_BYTE * (j+1)
         LEN_SECTION = int(data[CUR_BYTE : CUR_BYTE+2])
         CUR_BYTE += 2
         while True:
@@ -97,24 +98,57 @@ def parse(data):
             if LEN_SECTION == 0:
                 break
             question["QNAME"] += '.'
-        question["QTYPE"] = int(data[CUR_BYTE : CUR_BYTE + 4])
+        question["QTYPE"] = int(data[CUR_BYTE : CUR_BYTE + 4], 16)
         CUR_BYTE += 4
-        question["QCLASS"] = int(data[CUR_BYTE : CUR_BYTE + 4])
+        question["QCLASS"] = int(data[CUR_BYTE : CUR_BYTE + 4], 16)
         CUR_BYTE += 4
         response["question-" + str(j)] = question
+        question = {}
 
 
     #parse answerss
     answer = {}
     for i in range(NUM_ANSWERS):
-        print(data[CUR_BYTE])
-        answer["name pointer"] = data[CUR_BYTE]
-        CUR_BYTE += 1
+        #CUR_BYTE = CUR_BYTE * (i+1)
         
-        
-        response["answer-" + str(i)] = answer
-    
-    
+        answer["name"] = data[CUR_BYTE: CUR_BYTE + 4]
+        CUR_BYTE += 4
+        answer["TYPE"] = int(data[CUR_BYTE : CUR_BYTE + 4], 16)
+        CUR_BYTE += 4
+        answer["CLASS"] = int(data[CUR_BYTE : CUR_BYTE + 4], 16)
+        CUR_BYTE += 4
+        answer["TTL"] = int(data[CUR_BYTE : CUR_BYTE + 8], 16)
+        CUR_BYTE += 8
+        answer["RDLENGTH"] = int(data[CUR_BYTE : CUR_BYTE + 4], 16)
+        CUR_BYTE += 4
+        answer["RDATA"] = ''
+
+        if answer["TYPE"] == 1: #parse A record response
+            for z in range(answer["RDLENGTH"]*2-4):
+                answer["RDATA"] += str(int(data[CUR_BYTE : CUR_BYTE+2], 16))
+                CUR_BYTE += 2
+                if z != answer["RDLENGTH"]*2-5: 
+                    answer["RDATA"] += '.'
+                    
+            response["answer-" + str(i)] = answer
+            answer = {}
+        elif answer["TYPE"] == 15:  #parse MX record response
+            for z in range(answer["RDLENGTH"]*2-4):
+                if data[CUR_BYTE : CUR_BYTE+2] == "00" and z < answer["RDLENGTH"]-2:
+                    CUR_BYTE += 2
+                    continue
+                LEN_SECTION = data[CUR_BYTE : CUR_BYTE+2]
+                CUR_BYTE += 2
+                while True:
+                    
+                    if LEN_SECTION == 0:
+                        break
+
+                answer["RDATA"] += bytes.fromhex(data[CUR_BYTE : CUR_BYTE+2]).decode('ascii')
+                CUR_BYTE += 2
+                    
+            response["answer-" + str(i)] = answer
+            answer = {}
     print(response)
 
 
@@ -155,7 +189,7 @@ if __name__ == "__main__":
 # 00 00  -- QUESTION SECTION IS THE SAME AS ABOVE   }(same)
 # 01 00  -- QUESTION SECTION IS THE SAME AS ABOVE   }
 # 01     -- QUESTION SECTION IS THE SAME AS ABOVE   }
-# c0 0c  -- name offset = 12 (from begining)                    }
+# c0 0c  -- name offset = 12 (from begining)          1100 0000 0000 1100          }
 # 00 01  -- DNS record type  :  1 = A                           }
 # 00 01  -- Class of loopup  :  1 = internet                    }
 # 00 00  -- NULL BYTES??                                        } ANSWER 1
