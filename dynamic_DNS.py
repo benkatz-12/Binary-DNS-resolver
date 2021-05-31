@@ -1,5 +1,5 @@
 import socket
-import struct, binascii
+import struct, binascii, pprint
 
 def udp_dns(ip, port, query):
     header = b'fedc01000001000000000000'
@@ -17,7 +17,6 @@ def udp_dns(ip, port, query):
             length = length[2:].zfill(2)
         question += length
         question += binascii.hexlify(part_bits)
-
 
     header += question
     null = b'00' #null terminator at the end of the QNAME section
@@ -93,7 +92,7 @@ def parse(data):
         while True:
             question["QNAME"] += bytes.fromhex(data[CUR_BYTE : CUR_BYTE + LEN_SECTION*2]).decode("ascii")
             CUR_BYTE += LEN_SECTION*2
-            LEN_SECTION = int(data[CUR_BYTE : CUR_BYTE+2])
+            LEN_SECTION = int(data[CUR_BYTE : CUR_BYTE+2], 16)
             CUR_BYTE += 2
             if LEN_SECTION == 0:
                 break
@@ -122,7 +121,6 @@ def parse(data):
         answer["RDLENGTH"] = int(data[CUR_BYTE : CUR_BYTE + 4], 16)
         CUR_BYTE += 4
         answer["RDATA"] = ''
-
         if answer["TYPE"] == 1: #parse A record response
             for z in range(answer["RDLENGTH"]*2-4):
                 answer["RDATA"] += str(int(data[CUR_BYTE : CUR_BYTE+2], 16))
@@ -133,30 +131,43 @@ def parse(data):
             response["answer-" + str(i)] = answer
             answer = {}
         elif answer["TYPE"] == 15:  #parse MX record response
-            for z in range(answer["RDLENGTH"]*2-4):
-                if data[CUR_BYTE : CUR_BYTE+2] == "00" and z < answer["RDLENGTH"]-2:
+            CUR_BYTE += 4 #shaving off first 2 octets of RDATA section ????
+            LEN_SECTION = int(data[CUR_BYTE : CUR_BYTE+2], 16)
+            CUR_BYTE += 2
+            while LEN_SECTION != 0:
+                try:
+                    for a in range(LEN_SECTION):
+                        answer["RDATA"] += bytes.fromhex(data[CUR_BYTE : CUR_BYTE+2]).decode('ascii')
+                        CUR_BYTE += 2
+                    LEN_SECTION = int(data[CUR_BYTE : CUR_BYTE+2], 16)
                     CUR_BYTE += 2
-                    continue
-                LEN_SECTION = data[CUR_BYTE : CUR_BYTE+2]
-                CUR_BYTE += 2
-                while True:
-                    
+                    answer["RDATA"] += '.'
                     if LEN_SECTION == 0:
                         break
+                    elif LEN_SECTION == 192: #192=c0 means pointer to earlier text encoding
+                        CUR_BYTE = int(data[CUR_BYTE : CUR_BYTE+2], 16) * 2
+                        LEN_SECTION = int(data[CUR_BYTE : CUR_BYTE+2], 16)
+                        CUR_BYTE += 2
+                except Exception as e:
+                    print("ERROR : ", e)
 
-                answer["RDATA"] += bytes.fromhex(data[CUR_BYTE : CUR_BYTE+2]).decode('ascii')
-                CUR_BYTE += 2
-                    
+
+            
+                
             response["answer-" + str(i)] = answer
             answer = {}
-    print(response)
+
+    pp = pprint.PrettyPrinter(indent=4)
+    pprint.pprint(response)
 
 
 if __name__ == "__main__":
     ip = "8.8.8.8"
     query = "saep.io"
+    #query = "twitch.tv"
     #query = "test.quantreads.com"
     port = 53
+    #print(udp_dns(ip, port, query))
     udp_dns(ip, port, query)
 
 
