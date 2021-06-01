@@ -58,9 +58,9 @@ def translate_qname(qname):
         'HINFO': b'000d', #havent tested
         'MX': b'000f',
         'TXT': b'0010', #issue with truncation
-        'RP': b'0011', #not implemented
-        'SIG': b'0018', #not implemented
-        'KEY': b'0019', #not implemented
+        'RP': b'0011', #not implemented + NO TEST CASES
+        'SIG': b'0018', #not implemented + NO TEST CASES
+        'KEY': b'0019', #not implemented + NO TEST CASES
         'AAAA': b'001c', #not implemented
         'SRV': b'0021', #not implemented
         'NAPTR': b'0023', #not implemented
@@ -295,7 +295,14 @@ def parse(data):
                 CUR_BYTE += 2
             response["answer-" + str(i)] = answer
             answer = {}
-    
+        elif answer["TYPE"] == 'AAAA':
+            for a in range(8):
+                answer["RDATA"] += data[CUR_BYTE : CUR_BYTE+4].lstrip("0")
+                CUR_BYTE += 4
+                if a != 7: answer["RDATA"] += ':'
+            response["answer-" + str(i)] = answer
+            answer = {}
+
     #parse authority
     # authority = {}
     # for k in range(NUM_AUTHORITY):
@@ -332,12 +339,12 @@ def parse_domain(cur_byte, data):
 
 if __name__ == "__main__":
     
-    qname = 'CNAME'    
+    qname = 'AAAA'    
     ip = "8.8.8.8"
     
-    #domain = "saep.io"
+    domain = "saep.io"
     #domain = "twitch.tv"
-    domain = "test.quantreads.com"
+    #domain = "test.quantreads.com"
     
     port = 53
     udp_dns(ip, port, domain, qname)
