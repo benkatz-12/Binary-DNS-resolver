@@ -61,7 +61,7 @@ def translate_qname(qname):
         'RP': b'0011', #not implemented + NO TEST CASES
         'SIG': b'0018', #not implemented + NO TEST CASES
         'KEY': b'0019', #not implemented + NO TEST CASES
-        'AAAA': b'001c', #not implemented
+        'AAAA': b'001c', 
         'SRV': b'0021', #not implemented
         'NAPTR': b'0023', #not implemented
         'CERT': b'0025', #not implemented
@@ -116,6 +116,20 @@ def type_translator(type):
         257 : 'CAA'
     }
     return record_types[type]
+def rcode_translator(rcode):
+    rcode_trans = {
+        0 : 'NOERROR',
+        1 : 'FORMERROR',
+        2 : 'SERVFAIL',
+        3 : 'NXDOMAIN',
+        4 : 'NOTIMP',
+        5 : 'REFUSED',
+        6 : 'YXDOMAIN',
+        7 : 'XRRSET',
+        8 : 'NOTAUTH',
+        9 : 'NOTZONE'
+    }
+    return rcode_trans[rcode]
 
 def parse(data):
     response = {}
@@ -132,7 +146,7 @@ def parse(data):
         raise ValueError('Truncated Message Error (dont handle yet)')
     header["RD"] = flags[7]
     header["RA"] = flags[8]
-    header["RCODE"] = int(flags[12:17])
+    header["RCODE"] = rcode_translator(int(flags[12:17]))
     header["QDCOUNT"] = int(data[8:12])
     header["ANCOUNT"] = int(data[12:16])
     header["NSCOUNT"] = int(data[16:20])
@@ -309,7 +323,6 @@ def parse(data):
 
     
     #parse additional
-    pp = pprint.PrettyPrinter(indent=2)
     pprint.pprint(response)
 
 def parse_domain(cur_byte, data):
@@ -339,7 +352,7 @@ def parse_domain(cur_byte, data):
 
 if __name__ == "__main__":
     
-    qname = 'AAAA'    
+    qname = 'NAPTR'    
     ip = "8.8.8.8"
     
     domain = "saep.io"
