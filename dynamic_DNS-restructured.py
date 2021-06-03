@@ -61,7 +61,7 @@ def translate_qname(qname):
         'RP': b'0011', #not implemented + NO TEST CASES
         'SIG': b'0018', #not implemented + NO TEST CASES
         'KEY': b'0019', #not implemented + NO TEST CASES
-        'AAAA': b'001c', #not implemented
+        'AAAA': b'001c',
         'SRV': b'0021', #not implemented
         'NAPTR': b'0023', #not implemented
         'CERT': b'0025', #not implemented
@@ -91,7 +91,7 @@ def type_translator(type):
         12 : 'PTR',
         13 : 'HINFO',
         15 : 'MX',
-        16 : 'MX',
+        16 : 'TXT',
         17 : 'RP',
         24 : 'SIG',
         25 : 'KEY',

@@ -6,35 +6,56 @@ def udp_dns(ip, port, domain, qname):
 
     question = format_question(domain)
     qtype = translate_qname(qname)
+   
+    #Build Header
     header += question
     null = b'00' #null terminator at the end of the QNAME section
     header += null
-
     header += qtype
- 
     qclass = b'0001'  #QCLASS: (1) for internet class
     header += qclass
-
+   
     qfull = binascii.unhexlify(header)
- 
+   
     data = None
+
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) #intialize UDP socket
         sock.connect((ip, port))
         sock.send(qfull)
+   
     except Exception as e:
         print(f"Exception - {e}")
         return -1
-    data = sock.recv(1024)
-    while(1):
-        if data is not None:
-            if len(data) > 0:
-                break
+   
+    data = reciever(sock)
+   
     sock.close()
-    #return format_hex(binascii.hexlify(qfull).decode("utf-8"))
-    parse(binascii.hexlify(data).decode("utf-8"))
+    decoded_data = binascii.hexlify(data).decode("utf-8")
+    parse(decoded_data)
+   
     return format_hex(binascii.hexlify(data).decode("utf-8"))
  
+def reciever(sock):
+    try:
+        full_msg = b''
+       
+        msg = sock.recv(1024)
+       
+        while True:
+            if msg is not None:
+                full_msg += msg
+                msg = sock.recv(1024)
+                if len(msg) == 0:
+                    break
+            if msg == 'Truncated':
+                ...
+
+    except Exception as e:
+        print(e)
+
+    return full_msg
+
 def format_question(domain):
     question = b''
     split = domain.split('.')
@@ -45,54 +66,114 @@ def format_question(domain):
             length = length[2:].zfill(2)
         question += length
         question += binascii.hexlify(part_bits)
-    
+    return question
+   
 def format_hex(hex):
     """format_hex returns a pretty version of a hex string"""
     octets = [hex[i:i+2] for i in range(0, len(hex), 2)]
     pairs = [" ".join(octets[i:i+2]) for i in range(0, len(octets), 2)]
     return "\n".join(pairs)
+
 def translate_qname(qname):
-    binary_ref = None
-    ## 1st method
-    if qname is 'MX':
-        binary_ref = b'000f'
-    
-    if qname is 'CNAME':
-        binary_ref
-    ##2nd method
     qtranslator = {
-        'A': "",
-        'NS': "",
-        'CNAME': "",
-        'SOA': "",
-        'PTR': "",
-        'HINFO': "",
+        'A': b'0001',
+        'NS': b'0002',
+        'CNAME': b'0005',
+        'SOA': b'0006',
+        'PTR': b'000c', #havent tested
+        'HINFO': b'000d', #havent tested
         'MX': b'000f',
-        'TXT': "",
-        'RP': "",
-        'SIG': "",
-        'KEY': "",
-        'AAAA': "",
-        'SRV': "",
-        'NAPTR': "",
-        'CERT': "",
-        'DNAME': "",
-        'DS': "",
-        'SSHFP': "",
-        'IPSECKEY': "",
-        'RRSIG': "",
-        'NSEC': "",
-        'DNSKEY': "",
-        'NSEC3': "",
-        'NSEC3PARAM': "",
-        'TLSA': "",
-        'CDS': "",
-        'SVCB': "",
-        'HTTPS': "",
-        'TSIG': "",
-        'CAA': ""
+        'TXT': b'0010', #issue with truncation
+        'RP': b'0011', #not implemented + NO TEST CASES
+        'SIG': b'0018', #not implemented + NO TEST CASES
+        'KEY': b'0019', #not implemented + NO TEST CASES
+        'AAAA': b'001c',
+        'SRV': b'0021', #not implemented
+        'NAPTR': b'0023', #not implemented
+        'CERT': b'0025', #not implemented
+        'DNAME': b'0027', #not implemented
+        'DS': b'002b', #not implemented
+        'SSHFP': b'002c', #not implemented
+        'IPSECKEY': b'002d', #not implemented
+        'RRSIG': b'002e', #not implemented
+        'NSEC': b'002f', #not implemented
+        'DNSKEY': b'0030', #not implemented
+        'NSEC3': b'0032', #not implemented
+        'NSEC3PARAM': b'0033', #not implemented
+        'TLSA': b'0034', #not implemented
+        'CDS': b'003b', #not implemented
+        'SVCB': b'0040', #not implemented
+        'HTTPS': b'0041', #not implemented
+        'TSIG': b'00fa', #not implemented
+        'CAA': b'0101' #not implemented
     }
-    return binary_ref
+    return qtranslator[qname]
+def type_translator(type):
+    record_types = {
+        1 : 'A',
+        2 : 'NS',
+        5 : 'CNAME',
+        6 : 'SOA',
+        12 : 'PTR',
+        13 : 'HINFO',
+        15 : 'MX',
+        16 : 'MX',
+        17 : 'RP',
+        24 : 'SIG',
+        25 : 'KEY',
+        28 : 'AAAA',
+        33 : 'SRV',
+        35 : 'NAPTR',
+        37 : 'CERT',
+        39 : 'DNAME',
+        43 : 'DS',
+        44 : 'SSHFP',
+        45 : 'IPSECKEY',
+        46 : 'RRSIG',
+        47 : 'NSEC',
+        48 : 'DNSKEY',
+        50 : 'NSEC3',
+        51 : 'NSEC3PARAM',
+        52 : 'TSLA',
+        59 : 'CDS',
+        64 : 'SVCB',
+        65 : 'HTTPS',
+        250 : 'TSIG',
+        257 : 'CAA'
+    }
+   
+    return record_types.get(type)
+def header_parser(data):
+    response = {}
+ 
+    #parse header
+    header = {}
+    header["IDENT"] = data[0:4]
+    flags = bin(int(data[4:8], 16))[2:]
+    header["QR"] = flags[0] #0 for domain 1 for header
+    header["OPCODE"] = int(flags[1:5])
+    header["AA"] = flags[5]
+    header["TC"] = flags[6]
+   
+    if header["TC"] == '1':
+        raise ValueError('Truncated Message Error (dont handle yet)')
+   
+    header["RD"] = flags[7]
+    header["RA"] = flags[8]
+    header["RCODE"] = int(flags[12:17])
+    header["QDCOUNT"] = int(data[8:12])
+    header["ANCOUNT"] = int(data[12:16])
+    header["NSCOUNT"] = int(data[16:20])
+    header["ARCOUNT"] = int(data[20:24])
+    response["header"] = header
+   
+    NUM_ANSWERS = header["ANCOUNT"]
+    NUM_QUESTIONS = header["QDCOUNT"]
+    NUM_AUTHORITY = header["NSCOUNT"]
+    NUM_ADDITIONAL = header["ARCOUNT"]
+    CUR_BYTE = 24
+    return response
+   
 def parse(data):
     response = {}
  
@@ -104,6 +185,10 @@ def parse(data):
     header["OPCODE"] = int(flags[1:5])
     header["AA"] = flags[5]
     header["TC"] = flags[6]
+   
+    if header["TC"] == '1':
+        raise ValueError('Truncated Message Error (dont handle yet)')
+   
     header["RD"] = flags[7]
     header["RA"] = flags[8]
     header["RCODE"] = int(flags[12:17])
@@ -112,8 +197,11 @@ def parse(data):
     header["NSCOUNT"] = int(data[16:20])
     header["ARCOUNT"] = int(data[20:24])
     response["header"] = header
+   
     NUM_ANSWERS = header["ANCOUNT"]
     NUM_QUESTIONS = header["QDCOUNT"]
+    NUM_AUTHORITY = header["NSCOUNT"]
+    NUM_ADDITIONAL = header["ARCOUNT"]
     CUR_BYTE = 24
  
     #parse question section
@@ -131,7 +219,7 @@ def parse(data):
             if LEN_SECTION == 0:
                 break
             question["QNAME"] += '.'
-        question["QTYPE"] = int(data[CUR_BYTE : CUR_BYTE + 4], 16)
+        question["QTYPE"] = type_translator(int(data[CUR_BYTE : CUR_BYTE + 4], 16))
         CUR_BYTE += 4
         question["QCLASS"] = int(data[CUR_BYTE : CUR_BYTE + 4], 16)
         CUR_BYTE += 4
@@ -142,11 +230,21 @@ def parse(data):
     #parse answerss
     answer = {}
     for i in range(NUM_ANSWERS):
-        #CUR_BYTE = CUR_BYTE * (i+1)
-        
-        answer["name"] = data[CUR_BYTE: CUR_BYTE + 4]
+        answer["name"] = ''
+        if data[CUR_BYTE: CUR_BYTE + 2] == "c0": #code to follow pointer
+            name_ptr = int(data[CUR_BYTE + 2: CUR_BYTE + 4], 16)*2
+            LEN_SECTION = int(data[name_ptr : name_ptr+2]) #same code as above, move to function possibly?
+            name_ptr += 2
+            while True:
+                answer["name"] += bytes.fromhex(data[name_ptr : name_ptr + LEN_SECTION*2]).decode("ascii")
+                name_ptr += LEN_SECTION*2
+                LEN_SECTION = int(data[name_ptr : name_ptr+2], 16)
+                name_ptr += 2
+                if LEN_SECTION == 0:
+                    break
+                answer["name"] += '.'
         CUR_BYTE += 4
-        answer["TYPE"] = int(data[CUR_BYTE : CUR_BYTE + 4], 16)
+        answer["TYPE"] = type_translator(int(data[CUR_BYTE : CUR_BYTE + 4], 16))
         CUR_BYTE += 4
         answer["CLASS"] = int(data[CUR_BYTE : CUR_BYTE + 4], 16)
         CUR_BYTE += 4
@@ -155,17 +253,80 @@ def parse(data):
         answer["RDLENGTH"] = int(data[CUR_BYTE : CUR_BYTE + 4], 16)
         CUR_BYTE += 4
         answer["RDATA"] = ''
-        if answer["TYPE"] == 1: #parse A record response
+        if answer["TYPE"] == 'A':
             for z in range(answer["RDLENGTH"]*2-4):
                 answer["RDATA"] += str(int(data[CUR_BYTE : CUR_BYTE+2], 16))
                 CUR_BYTE += 2
                 if z != answer["RDLENGTH"]*2-5: 
                     answer["RDATA"] += '.'
-                    
+                   
             response["answer-" + str(i)] = answer
             answer = {}
-        elif answer["TYPE"] == 15:  #parse MX record response
-            CUR_BYTE += 4 #shaving off first 2 octets of RDATA section ????
+        elif answer["TYPE"] == 'NS':
+            ns_data = {}
+
+            ns_data["NSDNAME"], CUR_BYTE = parse_domain(CUR_BYTE, data)
+
+            answer["RDATA"] = ns_data
+            response["answer-" + str(i)] = answer
+            answer = {}
+        elif answer["TYPE"] == 'CNAME':
+            cname_data = {}
+
+            cname_data["CNAME"], CUR_BYTE = parse_domain(CUR_BYTE, data)
+
+            answer["RDATA"] = cname_data
+            response["answer-" + str(i)] = answer
+            answer = {}
+        elif answer["TYPE"] == 'SOA':
+            soa_data = {}
+            print('a', CUR_BYTE)
+            soa_data["MNAME"], CUR_BYTE = parse_domain(CUR_BYTE, data)
+            print('a', CUR_BYTE)
+            soa_data["RNAME"], CUR_BYTE = parse_domain(CUR_BYTE, data)
+            print('a', CUR_BYTE)
+            soa_data["SERIAL"] = data[CUR_BYTE : CUR_BYTE + 8]
+            CUR_BYTE += 8
+            soa_data["REFRESH"] = int(data[CUR_BYTE : CUR_BYTE + 8], 16)
+            CUR_BYTE += 8
+            soa_data["RETRY"] = int(data[CUR_BYTE : CUR_BYTE + 8], 16)
+            CUR_BYTE += 8
+            soa_data["EXPIRE"] = int(data[CUR_BYTE : CUR_BYTE + 8], 16)
+            CUR_BYTE += 8
+            soa_data["MINIMUM"] = int(data[CUR_BYTE : CUR_BYTE + 8], 16)
+            CUR_BYTE += 8
+
+            answer["RDATA"] = soa_data
+            response["answer-" + str(i)] = answer
+            answer = {}
+        elif answer["TYPE"] == 'PTR':
+            ptr_data = {}
+
+            ptrd_data["PTRDNAME"], CUR_BYTE = parse_domain(CUR_BYTE, data)
+
+            answer["RDATA"] = ptr_data
+            response["answer-" + str(i)] = answer
+            answer = {}
+        elif answer["TYPE"] == 'HINFO':
+            hinfo_data = {}
+            hinfo_data["CPU"] = ''
+            hinfo_data["OS"] = ''
+            string_length = int(data[CUR_BYTE : CUR_BYTE + 2], 16)
+            CUR_BYTE += 2
+            for a in range(string_length):
+                hinfo_data["CPU"] += bytes.fromhex(data[CUR_BYTE : CUR_BYTE + 2]).decode("ascii")
+                CUR_BYTE += 2
+            string_length = int(data[CUR_BYTE : CUR_BYTE + 2], 16)
+            CUR_BYTE += 2
+            for a in range(string_length):
+                hinfo_data["OS"] += bytes.fromhex(data[CUR_BYTE : CUR_BYTE + 2]).decode("ascii")
+                CUR_BYTE += 2
+            answer["RDATA"] = hinfo_data
+            response["answer-" + str(i)] = answer
+            answer = {}
+        elif answer["TYPE"] == 'MX':
+            answer["PREFRENCE"] = int(data[CUR_BYTE : CUR_BYTE+4], 16)
+            CUR_BYTE += 4
             LEN_SECTION = int(data[CUR_BYTE : CUR_BYTE+2], 16)
             CUR_BYTE += 2
             while LEN_SECTION != 0:
@@ -183,28 +344,69 @@ def parse(data):
                         LEN_SECTION = int(data[CUR_BYTE : CUR_BYTE+2], 16)
                         CUR_BYTE += 2
                 except Exception as e:
-                    print("ERROR : ", e)           
-                
+                    print("ERROR : ", e)
             response["answer-" + str(i)] = answer
             answer = {}
- 
-    pp = pprint.PrettyPrinter(indent=4)
+        elif answer["TYPE"] == 'TXT': #truncation issue
+            string_length = int(data[CUR_BYTE : CUR_BYTE + 2], 16)
+            CUR_BYTE += 2
+            for a in range(string_length):
+                answer["RDATA"] += bytes.fromhex(data[CUR_BYTE : CUR_BYTE + 2]).decode("ascii")
+                CUR_BYTE += 2
+            response["answer-" + str(i)] = answer
+            answer = {}
+        elif answer["TYPE"] == 'AAAA':
+            for a in range(8):
+                answer["RDATA"] += data[CUR_BYTE : CUR_BYTE+4].lstrip("0")
+                CUR_BYTE += 4
+                if a != 7: answer["RDATA"] += ':'
+            response["answer-" + str(i)] = answer
+            answer = {}
+
+    #parse authority
+    # authority = {}
+    # for k in range(NUM_AUTHORITY):
+
+   
+    #parse additional
+    pp = pprint.PrettyPrinter(indent=2)
     pprint.pprint(response)
- 
+
+def parse_domain(cur_byte, data):
+    pointer = False
+    RDATA = {}
+    RDATA["domain"] = ''
+    LEN_SECTION = int(data[cur_byte : cur_byte+2], 16)
+    cur_byte += 2
+    while True:
+        RDATA["domain"] += bytes.fromhex(data[cur_byte : cur_byte + LEN_SECTION*2]).decode("ascii")
+        cur_byte += LEN_SECTION*2
+        LEN_SECTION = int(data[cur_byte : cur_byte+2], 16)
+        cur_byte += 2
+        if LEN_SECTION == 0:
+            RDATA["domain"] += '.'
+            break
+        elif LEN_SECTION == 192: #192=c0 means pointer to earlier text encoding
+                pointer = True
+                old_cur_byte = cur_byte + 2
+                cur_byte = int(data[cur_byte : cur_byte+2], 16) * 2
+                LEN_SECTION = int(data[cur_byte : cur_byte+2], 16)
+                cur_byte += 2
+        RDATA["domain"] += '.'
+    if pointer:
+        return RDATA["domain"], old_cur_byte
+    return RDATA["domain"], cur_byte
+
 if __name__ == "__main__":
-    #qtype = b'0005' # (5) for CNAME records
-    #qtype = b'000f' # (15) for MX records
-    #qtype = b'0001' #QTYPE:  (1) for A records
-    
-    qname = 'MX'    
-    ip = "8.8.8.8"
-    
+   
+    qname = 'AAAA'   
+    ip = "http://8.8.8.8"
+   
     domain = "saep.io"
     #domain = "twitch.tv"
     #domain = "test.quantreads.com"
-    
+   
     port = 53
-    #print(udp_dns(ip, port, domain))
     udp_dns(ip, port, domain, qname)
 
 
@@ -214,63 +416,92 @@ if __name__ == "__main__":
 fe dc
 81 80
 00 01
-00 01
+00 02
 00 00
 00 00
-06 74
-77 69
-74 63
-68 02
-74 76
+04 73
+61 65
+70 02
+69 6f
 00 00
-06 00
-01   -27/54
-
+10 00
+01 
    c0
 0c 00
-06 00
+10 00
 01 00
-00 03
-83 00
-45  - 33/66
-
-   06
-6e 73
-2d 32
+00 0c
+69 00
+2c 2b
+4d 53
+3d 44
+39 38
+34 39
 31 39
-09 61
-77 73
-64 6e
-73 2d
-32 37
-|03 63 - 78
-6f 6d
-00  - 44/88
-   11
-61 77
-73 64
-6e 73
-2d 68
-6f 73
-74 6d
+36 46
+44 43
+32 32
+46 41
+41 42
+36 35
+35 33
+46 38
+31 33
+33 31
+32 46
+36 33
+34 43
+37 41
+41 34
+31 41
+46 
+   c0
+0c 00
+10 00
+01 00
+00 0c
+69 00
+57 56
+76 3d
+73 70
+66 31
+20 69
+6e 63
+6c 75
+64 65
+3a 75
+73 2e
+5f 6e
+65 74
+62 6c
+6f 63
+6b 73
+2e 6d
+69 6d
+65 63
 61 73
-74 65
-72  - 53/106
-   06
-61 6d
-61 7a
-6f 6e - 56.5/113
-
-c0 38
-
-
-00 00
-00 01
-00 00
-01 2c
-00 00
-00 96
-00 09
-3a 80
-00 00
-00 3c
+74 2e
+63 6f
+6d 20
+69 6e
+63 6c
+75 64
+65 3a
+31 39
+36 38
+32 31
+35 38
+2e 73
+70 66
+30 31
+2e 68
+75 62
+73 70
+6f 74
+65 6d
+61 69
+6c 2e
+6e 65
+74 20
+2d 61
+6c 6c
