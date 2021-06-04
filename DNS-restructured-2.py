@@ -87,15 +87,15 @@ def translate_qname(qname):
         'NS': b'0002',
         'CNAME': b'0005',
         'SOA': b'0006',
-        'PTR': b'000c', #havent tested
-        'HINFO': b'000d', #havent tested
+        'PTR': b'000c', #NO TEST CASES
+        'HINFO': b'000d', #NO TEST CASES
         'MX': b'000f',
         'TXT': b'0010', #issue with truncation
         'RP': b'0011', #not implemented + NO TEST CASES
         'SIG': b'0018', #not implemented + NO TEST CASES
         'KEY': b'0019', #not implemented + NO TEST CASES
         'AAAA': b'001c',
-        'SRV': b'0021', #not implemented
+        'SRV': b'0021', #NO TEST CASES
         'NAPTR': b'0023', #not implemented
         'CERT': b'0025', #not implemented
         'DNAME': b'0027', #not implemented
@@ -248,6 +248,12 @@ def AAAA_parse(data, CUR_BYTE):
         CUR_BYTE += 4
         if a != 7: aaaa_data["IPv6"] += ':'
     return aaaa_data, CUR_BYTE
+def SRV_parse(data, CUR_BYTE):
+    srv_data = {}
+    srv_data["Priority"] = int(data[CUR_BYTE : CUR_BYTE + 4], 16)
+    srv_data["Weight"] = int(data[CUR_BYTE : CUR_BYTE + 4], 16)
+    srv_data["Port"] = int(data[CUR_BYTE : CUR_BYTE + 4], 16)
+    srv_data["Target"], CUR_BYTE = parse_domain(CUR_BYTE, data)
 
 
 def header_parser(data):
@@ -294,7 +300,7 @@ def question_parser(data, CUR_BYTE):
     question["QCLASS"] = int(data[CUR_BYTE : CUR_BYTE + 4], 16)
     CUR_BYTE += 4
     return question, CUR_BYTE
-def answer_parser(data, CUR_BYTE):
+def record_parser(data, CUR_BYTE):
     answer = {}
     answer["name"] = ''
     if data[CUR_BYTE: CUR_BYTE + 2] == "c0": #code to follow pointer
@@ -345,6 +351,9 @@ def answer_parser(data, CUR_BYTE):
     elif answer["TYPE"] == 'AAAA':
         answer["RDATA"], CUR_BYTE = AAAA_parse(data, CUR_BYTE)
         return answer, CUR_BYTE
+    elif answer["TYPE"] == 'SRV':
+        answer["RDATA"], CUR_BYTE = SRV_parse(data, CUR_BYTE)
+        return answer, CUR_BYTE
     return answer, CUR_BYTE
 
 
@@ -365,15 +374,17 @@ def parse(data):
  
     #parse answers
     for i in range(NUM_ANSWERS):
-        response["answer-" + str(i)], CUR_BYTE = answer_parser(data, CUR_BYTE)
+        response["answer-" + str(i)], CUR_BYTE = record_parser(data, CUR_BYTE)
  
     #parse authority
-
+    for k in range(NUM_AUTHORITY):
+        response["authority-" + str(k)], CUR_BYTE = record_parser(data, CUR_BYTE)
+        NUM_ADDITIONAL+-1
 
     #parse additional
+    for m in range(NUM_ADDITIONAL):
+        response["additional-" + str(m)], CUR_BYTE = record_parser(data, CUR_BYTE)
 
-
-    pp = pprint.PrettyPrinter(indent=2)
     pprint.pprint(response)
 
 
@@ -381,7 +392,7 @@ def parse(data):
 
 if __name__ == "__main__":
    
-    qname = 'A'   
+    qname = 'CNAME'   
     ip = "8.8.8.8"
    
     domain = "saep.io"
