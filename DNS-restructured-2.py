@@ -91,14 +91,14 @@ def translate_qname(qname):
         'HINFO': b'000d', #NO TEST CASES
         'MX': b'000f',
         'TXT': b'0010', #issue with truncation
-        'RP': b'0011', #not implemented + NO TEST CASES
-        'SIG': b'0018', #not implemented + NO TEST CASES
-        'KEY': b'0019', #not implemented + NO TEST CASES
+        'RP': b'0011', #NO TEST CASES
+        'SIG': b'0018', #not implemented + NO TEST CASES + NEED TEST CASES
+        'KEY': b'0019', #not implemented + NO TEST CASES + NEED TEST CASES
         'AAAA': b'001c',
         'SRV': b'0021', #NO TEST CASES
-        'NAPTR': b'0023', #not implemented
-        'CERT': b'0025', #not implemented
-        'DNAME': b'0027', #not implemented
+        'NAPTR': b'0023', #NO TEST CASES, REGEXP FIELD SPECIAL FORMATTING?? DDDS ALGO??
+        'CERT': b'0025', #not implemented + MASSIVE RABBIT HOLE OF PARSING DIFFERENT CERTIFICATE TYPES??
+        'DNAME': b'0027', #NO TEST CASES
         'DS': b'002b', #not implemented
         'SSHFP': b'002c', #not implemented
         'IPSECKEY': b'002d', #not implemented
@@ -175,6 +175,14 @@ def parse_domain(cur_byte, data):
     if pointer:
         return RDATA["domain"], old_cur_byte
     return RDATA["domain"], cur_byte
+def parse_char_string(CUR_BYTE, data):
+    txt = ''
+    string_length = int(data[CUR_BYTE : CUR_BYTE + 2], 16)
+    CUR_BYTE += 2
+    for a in range(string_length):
+        txt += bytes.fromhex(data[CUR_BYTE : CUR_BYTE + 2]).decode("ascii")
+        CUR_BYTE += 2
+    return txt, CUR_BYTE
 
 def A_parse(data, answer, CUR_BYTE):
     for z in range(answer["RDLENGTH"]*2-4):
@@ -208,7 +216,7 @@ def SOA_parse(data, CUR_BYTE):
     return soa_data, CUR_BYTE
 def PTR_parse(data, CUR_BYTE):
     ptr_data = {}
-    ptrd_data["PTRDNAME"], CUR_BYTE = parse_domain(CUR_BYTE, data)
+    ptr_data["PTRDNAME"], CUR_BYTE = parse_domain(CUR_BYTE, data)
     return ptr_data, CUR_BYTE
 def HINFO_parse(data, CUR_BYTE):
     hinfo_data = {}
@@ -240,6 +248,11 @@ def TXT_parse(data, CUR_BYTE):
         txt_data["TXT-DATA"] += bytes.fromhex(data[CUR_BYTE : CUR_BYTE + 2]).decode("ascii")
         CUR_BYTE += 2
     return txt_data, CUR_BYTE
+def RP_parse(data, CUR_BYTE):
+    rp_data = {}
+    rp_data["mbox-dname"], CUR_BYTE = parse_domain(CUR_BYTE, data)
+    rp_data["txt-dname"], CUR_BYTE = parse_domain(CUR_BYTE, data)
+    return rp_data, CUR_BYTE
 def AAAA_parse(data, CUR_BYTE):
     aaaa_data = {}
     aaaa_data["IPv6"] = ''
@@ -254,7 +267,22 @@ def SRV_parse(data, CUR_BYTE):
     srv_data["Weight"] = int(data[CUR_BYTE : CUR_BYTE + 4], 16)
     srv_data["Port"] = int(data[CUR_BYTE : CUR_BYTE + 4], 16)
     srv_data["Target"], CUR_BYTE = parse_domain(CUR_BYTE, data)
-
+    return srv_data, CUR_BYTE
+def NAPTR_parse(data, CUR_BYTE):
+    naptr_data = {}
+    naptr_data["ORDER"] = data[CUR_BYTE : CUR_BYTE + 4]
+    CUR_BYTE += 4
+    naptr_data["PREFRENCE"] = data[CUR_BYTE : CUR_BYTE + 4]
+    CUR_BYTE += 4
+    naptr_data["FLAGS"], CUR_BYTE = parse_char_string(CUR_BYTE, data)
+    naptr_data["SERVICES"], CUR_BYTE = parse_char_string(CUR_BYTE, data)
+    naptr_data["REGEXP"], CUR_BYTE = parse_char_string(CUR_BYTE, data)
+    naptr_data["REPLACEMENT"], CUR_BYTE = parse_domain(CUR_BYTE, data)
+    return naptr_data, CUR_BYTE
+def DNAME_parse(data, CUR_BYTE):
+    dname_data = {}
+    dname_data["TARGET"], CUR_BYTE = parse_domain(CUR_BYTE, data)
+    return dname_data, CUR_BYTE
 
 def header_parser(data):
     header = {}
@@ -275,11 +303,6 @@ def header_parser(data):
     header["ANCOUNT"] = int(data[12:16])
     header["NSCOUNT"] = int(data[16:20])
     header["ARCOUNT"] = int(data[20:24])
-   
-    NUM_ANSWERS = header["ANCOUNT"]
-    NUM_QUESTIONS = header["QDCOUNT"]
-    NUM_AUTHORITY = header["NSCOUNT"]
-    NUM_ADDITIONAL = header["ARCOUNT"]
     CUR_BYTE = 24
     return header, CUR_BYTE
 def question_parser(data, CUR_BYTE):
@@ -348,11 +371,20 @@ def record_parser(data, CUR_BYTE):
     elif answer["TYPE"] == 'TXT': #truncation issue
         answer["RDATA"], CUR_BYTE = TXT_parse(data, CUR_BYTE)
         return answer, CUR_BYTE
+    elif answer["TYPE"] == 'RP':
+        answer["RDATA"], CUR_BYTE = RP_parse(data, CUR_BYTE)
+        return answer, CUR_BYTE
     elif answer["TYPE"] == 'AAAA':
         answer["RDATA"], CUR_BYTE = AAAA_parse(data, CUR_BYTE)
         return answer, CUR_BYTE
     elif answer["TYPE"] == 'SRV':
         answer["RDATA"], CUR_BYTE = SRV_parse(data, CUR_BYTE)
+        return answer, CUR_BYTE
+    elif answer["TYPE"] == 'NAPTR':
+        answer['RDATA'], CUR_BYTE = NAPTR_parse(data, CUR_BYTE)
+        return answer, CUR_BYTE
+    elif answer["TYPE"] == 'DNAME':
+        answer["RDATA"], CUR_BYTE = DNAME_parse(data, CUR_BYTE)
         return answer, CUR_BYTE
     return answer, CUR_BYTE
 
@@ -379,7 +411,7 @@ def parse(data):
     #parse authority
     for k in range(NUM_AUTHORITY):
         response["authority-" + str(k)], CUR_BYTE = record_parser(data, CUR_BYTE)
-        NUM_ADDITIONAL+-1
+        NUM_ADDITIONAL-=1
 
     #parse additional
     for m in range(NUM_ADDITIONAL):
@@ -392,7 +424,7 @@ def parse(data):
 
 if __name__ == "__main__":
    
-    qname = 'CNAME'   
+    qname = 'DNAME'   
     ip = "8.8.8.8"
    
     domain = "saep.io"
