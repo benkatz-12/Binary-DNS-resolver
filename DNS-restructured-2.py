@@ -99,13 +99,13 @@ def translate_qname(qname):
         'NAPTR': b'0023', #NO TEST CASES, REGEXP FIELD SPECIAL FORMATTING?? DDDS ALGO??
         'CERT': b'0025', #not implemented + MASSIVE RABBIT HOLE OF PARSING DIFFERENT CERTIFICATE TYPES??
         'DNAME': b'0027', #NO TEST CASES
-        'DS': b'002b', #not implemented
-        'SSHFP': b'002c', #not implemented
-        'IPSECKEY': b'002d', #not implemented
-        'RRSIG': b'002e', #not implemented
-        'NSEC': b'002f', #not implemented
-        'DNSKEY': b'0030', #not implemented
-        'NSEC3': b'0032', #not implemented
+        'DS': b'002b', #not implemented + DNSSEC RABBIT HOLE 
+        'SSHFP': b'002c', #not implemented+ DNSSEC RABBIT HOLE 
+        'IPSECKEY': b'002d', #not implemented + DNSSEC RABBIT HOLE 
+        'RRSIG': b'002e', #not implemented+ DNSSEC RABBIT HOLE 
+        'NSEC': b'002f', #not implemented+ DNSSEC RABBIT HOLE 
+        'DNSKEY': b'0030', #not implemented+ DNSSEC RABBIT HOLE 
+        'NSEC3': b'0032', #not implemented+ DNSSEC RABBIT HOLE 
         'NSEC3PARAM': b'0033', #not implemented
         'TLSA': b'0034', #not implemented
         'CDS': b'003b', #not implemented
@@ -220,18 +220,20 @@ def PTR_parse(data, CUR_BYTE):
     return ptr_data, CUR_BYTE
 def HINFO_parse(data, CUR_BYTE):
     hinfo_data = {}
-    hinfo_data["CPU"] = ''
-    hinfo_data["OS"] = ''
-    string_length = int(data[CUR_BYTE : CUR_BYTE + 2], 16)
-    CUR_BYTE += 2
-    for a in range(string_length):
-        hinfo_data["CPU"] += bytes.fromhex(data[CUR_BYTE : CUR_BYTE + 2]).decode("ascii")
-        CUR_BYTE += 2
-    string_length = int(data[CUR_BYTE : CUR_BYTE + 2], 16)
-    CUR_BYTE += 2
-    for a in range(string_length):
-        hinfo_data["OS"] += bytes.fromhex(data[CUR_BYTE : CUR_BYTE + 2]).decode("ascii")
-        CUR_BYTE += 2
+    hinfo_data["CPU"], CUR_BYTE = parse_char_string(CUR_BYTE, data)
+    hinfo_data["OS"], CUR_BYTE = parse_char_string(CUR_BYTE, data)
+    # hinfo_data["CPU"] = ''
+    # hinfo_data["OS"] = ''
+    # string_length = int(data[CUR_BYTE : CUR_BYTE + 2], 16)
+    # CUR_BYTE += 2
+    # for a in range(string_length):
+    #     hinfo_data["CPU"] += bytes.fromhex(data[CUR_BYTE : CUR_BYTE + 2]).decode("ascii")
+    #     CUR_BYTE += 2
+    # string_length = int(data[CUR_BYTE : CUR_BYTE + 2], 16)
+    # CUR_BYTE += 2
+    # for a in range(string_length):
+    #     hinfo_data["OS"] += bytes.fromhex(data[CUR_BYTE : CUR_BYTE + 2]).decode("ascii")
+    #     CUR_BYTE += 2
     return hinfo_data, CUR_BYTE
 def MX_parse(data, CUR_BYTE):
     mx_data = {}
@@ -241,12 +243,7 @@ def MX_parse(data, CUR_BYTE):
     return mx_data, CUR_BYTE
 def TXT_parse(data, CUR_BYTE):
     txt_data = {}
-    txt_data["TXT-DATA"] = ''
-    string_length = int(data[CUR_BYTE : CUR_BYTE + 2], 16)
-    CUR_BYTE += 2
-    for a in range(string_length):
-        txt_data["TXT-DATA"] += bytes.fromhex(data[CUR_BYTE : CUR_BYTE + 2]).decode("ascii")
-        CUR_BYTE += 2
+    txt_data["TXT-DATA"], CUR_BYTE = parse_char_string(CUR_BYTE, data)
     return txt_data, CUR_BYTE
 def RP_parse(data, CUR_BYTE):
     rp_data = {}
@@ -363,7 +360,7 @@ def record_parser(data, CUR_BYTE):
         answer["RDATA"], CUR_BYTE = PTR_parse(data, CUR_BYTE)
         return answer, CUR_BYTE
     elif answer["TYPE"] == 'HINFO':
-        answer["RDATA"] = HINFO_parse(data, CUR_BYTE)
+        answer["RDATA"], CUR_BYTE = HINFO_parse(data, CUR_BYTE)
         return answer, CUR_BYTE
     elif answer["TYPE"] == 'MX':
         answer["RDATA"], CUR_BYTE = MX_parse(data, CUR_BYTE)
@@ -424,12 +421,14 @@ def parse(data):
 
 if __name__ == "__main__":
    
-    qname = 'DNAME'   
+    qname = 'TXT'   
     ip = "8.8.8.8"
    
-    domain = "saep.io"
+    #domain = "saep.io"
     #domain = "twitch.tv"
     #domain = "test.quantreads.com"
+    domain = "microsoft.com"
+    #domain = "cloudflare.com"
    
     port = 53
     udp_dns(ip, port, domain, qname)
