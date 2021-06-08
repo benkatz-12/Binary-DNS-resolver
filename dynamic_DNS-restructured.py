@@ -195,14 +195,16 @@ def A_parse(data, current_byte, answer):
 def NS_parse(data, current_byte, answer):
     ns_data = {}
     ns_data["NSDNAME"], current_byte = parse_domain(current_byte, data)
-    return ns_data, current_byte
+    answer["RDATA"] = ns_data
+    return answer, current_byte
 
-def CNAME_parse(data, current_byte):
+def CNAME_parse(data, current_byte, answer):
     cname_data = {}
     cname_data["CNAME"], current_byte = parse_domain(current_byte, data)
-    return cname_data, current_byte
+    answer["RDATA"] = cname_data
+    return answer, current_byte
 
-def SOA_parse(data, current_byte):
+def SOA_parse(data, current_byte, answer):
     soa_data = {}
     soa_data["MNAME"], current_byte = parse_domain(current_byte, data)
     soa_data["RNAME"], current_byte = parse_domain(current_byte, data)
@@ -216,14 +218,16 @@ def SOA_parse(data, current_byte):
     current_byte += 8
     soa_data["MINIMUM"] = int(data[current_byte : current_byte + 8], 16)
     current_byte += 8
-    return soa_data, current_byte
+    answer["RDATA"] = soa_data
+    return answer, current_byte
 
-def PTR_parse(data, current_byte):
+def PTR_parse(data, current_byte, answer):
     ptr_data = {}
     ptr_data["PTRDNAME"], current_byte = parse_domain(current_byte, data)
-    return ptr_data, current_byte
+    answer["RDATA"] = ptr_data
+    return answer, current_byte
 
-def HINFO_parse(data, current_byte):
+def HINFO_parse(data, current_byte, answer):
     hinfo_data = {}
     hinfo_data["CPU"], current_byte = parse_char_string(current_byte, data)
     hinfo_data["OS"], current_byte = parse_char_string(current_byte, data)
@@ -239,44 +243,50 @@ def HINFO_parse(data, current_byte):
     # for a in range(string_length):
     #     hinfo_data["OS"] += bytes.fromhex(data[current_byte : current_byte + 2]).decode("ascii")
     #     current_byte += 2
-    return hinfo_data, current_byte
+    answer["RDATA"] = hinfo_data
+    return answer, current_byte
 
-def MX_parse(data, current_byte):
+def MX_parse(data, current_byte, answer):
     mx_data = {}
     mx_data["PREFRENCE"] = int(data[current_byte : current_byte+4], 16)
     current_byte += 4
     mx_data["EXCHANGE"], current_byte = parse_domain(current_byte, data)
+    answer["RDATA"] = mx_data
     return mx_data, current_byte
 
-def TXT_parse(data, current_byte):
+def TXT_parse(data, current_byte, answer):
     txt_data = {}
     txt_data["TXT-DATA"], current_byte = parse_char_string(current_byte, data)
-    return txt_data, current_byte
+    answer["RDATA"] = txt_data
+    return answer, current_byte
 
-def RP_parse(data, current_byte):
+def RP_parse(data, current_byte, answer):
     rp_data = {}
     rp_data["mbox-dname"], current_byte = parse_domain(current_byte, data)
     rp_data["txt-dname"], current_byte = parse_domain(current_byte, data)
+    answer["RDATA"] = rp_data
     return rp_data, current_byte
 
-def AAAA_parse(data, current_byte):
+def AAAA_parse(data, current_byte, answer):
     aaaa_data = {}
     aaaa_data["IPv6"] = ''
     for a in range(8):
         aaaa_data["IPv6"] += data[current_byte : current_byte+4].lstrip("0")
         current_byte += 4
         if a != 7: aaaa_data["IPv6"] += ':'
-    return aaaa_data, current_byte
+    answer["RDATA"] = aaaa_data
+    return answer, current_byte
 
-def SRV_parse(data, current_byte):
+def SRV_parse(data, current_byte, answer):
     srv_data = {}
     srv_data["Priority"] = int(data[current_byte : current_byte + 4], 16)
     srv_data["Weight"] = int(data[current_byte : current_byte + 4], 16)
     srv_data["Port"] = int(data[current_byte : current_byte + 4], 16)
     srv_data["Target"], current_byte = parse_domain(current_byte, data)
-    return srv_data, current_byte
+    answer["RDATA"] = srv_data
+    return answer, current_byte
 
-def NAPTR_parse(data, current_byte):
+def NAPTR_parse(data, current_byte, answer):
     naptr_data = {}
     naptr_data["ORDER"] = data[current_byte : current_byte + 4]
     current_byte += 4
@@ -286,12 +296,14 @@ def NAPTR_parse(data, current_byte):
     naptr_data["SERVICES"], current_byte = parse_char_string(current_byte, data)
     naptr_data["REGEXP"], current_byte = parse_char_string(current_byte, data)
     naptr_data["REPLACEMENT"], current_byte = parse_domain(current_byte, data)
-    return naptr_data, current_byte
+    answer["RDATA"] = naptr_data
+    return answer, current_byte
 
-def DNAME_parse(data, current_byte):
+def DNAME_parse(data, current_byte, answer):
     dname_data = {}
     dname_data["TARGET"], current_byte = parse_domain(current_byte, data)
-    return dname_data, current_byte
+    answer["RDATA"] = dname_data
+    return answer, current_byte
 
 def header_parser(data):
     header = {}
@@ -303,7 +315,7 @@ def header_parser(data):
     header["TC"] = flags[6]
    
     if header["TC"] == '1':
-        raise ValueError('Truncated Message Error (dont handle yet)')
+        raise ValueError('Truncated Message Error (need TCP connection)')
    
     header["RD"] = flags[7]
     header["RA"] = flags[8]
@@ -318,7 +330,7 @@ def header_parser(data):
 def question_parser(data, current_byte):
     question = {}
     question["QNAME"] = ''
-    LEN_SECTION = int(data[current_byte : current_byte+2])
+    LEN_SECTION = int(data[current_byte : current_byte+2], 16)
     current_byte += 2
     while True:
         question["QNAME"] += bytes.fromhex(data[current_byte : current_byte + LEN_SECTION*2]).decode("ascii")
@@ -334,12 +346,32 @@ def question_parser(data, current_byte):
     current_byte += 4
     return question, current_byte
 
+def eval_rr(rtype):
+    d = {
+    "A": A_parse,
+    "NS": NS_parse,
+    "CNAME": CNAME_parse,
+    "SOA": SOA_parse,
+    "PTR": PTR_parse,
+    "HINFO": HINFO_parse,
+    "MX": MX_parse,
+    "TXT": TXT_parse,
+    "RP": RP_parse,
+    "AAAA": AAAA_parse,
+    "SRV": SRV_parse,
+    "NAPTR": NAPTR_parse,
+    "DNAME": DNAME_parse
+    }
+
+    func = d[rtype]
+    return func
+
 def record_parser(data, current_byte):
     answer = {}
     answer["name"] = ''
     if data[current_byte: current_byte + 2] == "c0": #code to follow pointer
         name_ptr = int(data[current_byte + 2: current_byte + 4], 16)*2
-        LEN_SECTION = int(data[name_ptr : name_ptr+2]) #same code as above, move to function possibly?
+        LEN_SECTION = int(data[name_ptr : name_ptr+2], 16) #same code as above, move to function possibly?
         name_ptr += 2
         while True:
             answer["name"] += bytes.fromhex(data[name_ptr : name_ptr + LEN_SECTION*2]).decode("ascii")
@@ -360,72 +392,7 @@ def record_parser(data, current_byte):
     current_byte += 4
     answer["RDATA"] = ''
 
-
-######    
-    d = {
-        "NS": NS_parse,
-        "A": A_parse,
-        "NS": NS_parse,
-        "CNAME": CNAME_parse,
-
-    }
-
-    func = d[dns_type]
-    return func(data, current_byte, answer)
-######
-
-    if answer["TYPE"] == 'A':
-        return A_parse(data, current_byte, answer)
-   
-    elif answer["TYPE"] == 'NS':
-        return NS_parse(data, current_byte, answer)
-
-        # answer["RDATA"], current_byte = NS_parse(data, current_byte, answer)
-        # return answer, current_byte
-   
-    elif answer["TYPE"] == 'CNAME':
-        answer["RDATA"], current_byte = CNAME_parse(data, current_byte)
-        return answer, current_byte
-   
-    elif answer["TYPE"] == 'SOA':
-        answer["RDATA"], current_byte = SOA_parse(data, current_byte)
-        return answer, current_byte
-   
-    elif answer["TYPE"] == 'PTR':
-        answer["RDATA"], current_byte = PTR_parse(data, current_byte)
-        return answer, current_byte
-   
-    elif answer["TYPE"] == 'HINFO':
-        answer["RDATA"] = HINFO_parse(data, current_byte)
-        return answer, current_byte
-   
-    elif answer["TYPE"] == 'MX':
-        answer["RDATA"], current_byte = MX_parse(data, current_byte)
-        return answer, current_byte
-   
-    elif answer["TYPE"] == 'TXT': #truncation issue
-        answer["RDATA"], current_byte = TXT_parse(data, current_byte)
-        return answer, current_byte
-    elif answer["TYPE"] == 'RP':
-        answer["RDATA"], current_byte = RP_parse(data, current_byte)
-        return answer, current_byte
-    elif answer["TYPE"] == 'AAAA':
-        answer["RDATA"], current_byte = AAAA_parse(data, current_byte)
-        return answer, current_byte
-    elif answer["TYPE"] == 'SRV':
-        answer["RDATA"], current_byte = SRV_parse(data, current_byte)
-        return answer, current_byte
-    elif answer["TYPE"] == 'NAPTR':
-        answer['RDATA'], current_byte = NAPTR_parse(data, current_byte)
-        return answer, current_byte
-    elif answer["TYPE"] == 'DNAME':
-        answer["RDATA"], current_byte = DNAME_parse(data, current_byte)
-        return answer, current_byte
-   
-   
-    return answer, current_byte
-
-
+    return eval_rr(answer["TYPE"])(data, current_byte, answer)
 
 def parse(data):
     response = {}
@@ -461,12 +428,13 @@ def parse(data):
 
 if __name__ == "__main__":
    
-    qname = 'SRV'   
-    ip = "http://8.8.8.8"
+    qname = 'DDDS'   
+    ip = "8.8.8.8"
    
     #domain = "saep.io"
-    domain = "twitch.tv"
+    #domain = "twitch.tv"
     #domain = "test.quantreads.com"
+    domain = "cloudflare.com"
    
     port = 53
     udp_dns(ip, port, domain, qname)
