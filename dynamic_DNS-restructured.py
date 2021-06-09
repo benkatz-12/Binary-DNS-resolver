@@ -1,6 +1,10 @@
 import socket
 import struct, binascii, pprint
- 
+
+dnssec = ["RRSIG", "DNSKEY", "DS", "NSEC", "NSEC3", "CDS", "CDNKEY"]
+OPT_rr = b''
+
+
 def udp_dns(ip, port, domain, qname):
     #hardcoded header
     header = b'fedc01000001000000000000' 
@@ -8,7 +12,9 @@ def udp_dns(ip, port, domain, qname):
     #build question section
     question = format_question(domain)
     qtype = translate_qname(qname)
-   
+    if qtype in dnssec:
+        additional = OPT_rr
+
     #build full message
     header += question
     null = b'00' #null terminator at the end of the QNAME section
@@ -101,7 +107,7 @@ def translate_qname(qname):
         'CERT': b'0025', #not implemented + MASSIVE RABBIT HOLE OF PARSING DIFFERENT CERTIFICATE TYPES??
         'DS': b'002b', #not implemented + DNSSEC RABBIT HOLE
         'SSHFP': b'002c', #not implemented+ DNSSEC RABBIT HOLE
-        'IPSECKEY': b'002d', #not implemented + DNSSEC RABBIT HOLE
+        'IPSECKEY': b'002d', #not implemented
         'RRSIG': b'002e', #not implemented+ DNSSEC RABBIT HOLE // Cloudflare.com
         'NSEC': b'002f', #not implemented+ DNSSEC RABBIT HOLE
         'DNSKEY': b'0030', #not implemented+ DNSSEC RABBIT HOLE // Cloudflare.com
@@ -133,16 +139,16 @@ def type_translator(type):
         35 : 'NAPTR',
         37 : 'CERT',
         39 : 'DNAME',
-        43 : 'DS',
+        43 : 'DS', #DNSSEC
         44 : 'SSHFP',
         45 : 'IPSECKEY',
-        46 : 'RRSIG',
-        47 : 'NSEC',
-        48 : 'DNSKEY',
-        50 : 'NSEC3',
+        46 : 'RRSIG', #DNSSEC
+        47 : 'NSEC', #DNSSEC
+        48 : 'DNSKEY', #DNSSEC
+        50 : 'NSEC3', #DNSSEC
         51 : 'NSEC3PARAM',
         52 : 'TSLA',
-        59 : 'CDS',
+        59 : 'CDS', #DNSSEC
         64 : 'SVCB',
         65 : 'HTTPS',
         250 : 'TSIG',
