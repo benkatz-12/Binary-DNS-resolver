@@ -305,6 +305,17 @@ def DNAME_parse(data, current_byte, answer):
     answer["RDATA"] = dname_data
     return answer, current_byte
 
+def DNSKEY_parse(data, current_byte, answer):
+    dnskey_data = {}
+    dnskey_data["FLAGS"] = data[current_byte : current_byte + 2] #flag 7 and flag 15
+    current_byte+= 2
+    dnskey_data["PROTOCOL"] = int(data[current_byte : current_byte + 1], 16)
+    current_byte+= 1
+    if dnskey_data["PROTOCOL"] != 3:
+        raise ValueError("DNSKEY protocol field needs to be 3")
+    dnskey_data["ALGORITHM"] = data[current_byte : current_byte + 1]
+    current_byte+= 1
+
 def header_parser(data):
     header = {}
     header["IDENT"] = data[0:4]
@@ -360,7 +371,8 @@ def eval_rr(rtype):
     "AAAA": AAAA_parse,
     "SRV": SRV_parse,
     "NAPTR": NAPTR_parse,
-    "DNAME": DNAME_parse
+    "DNAME": DNAME_parse,
+    "DNSKEY": DNSKEY_parse
     }
 
     func = d[rtype]
