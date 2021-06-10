@@ -318,9 +318,11 @@ def DNSKEY_parse(data, current_byte, answer):
     dnskey_data["PROTOCOL"] = int(data[current_byte : current_byte + 1], 16)
     current_byte+= 1
     if dnskey_data["PROTOCOL"] != 3:
-        raise ValueError("DNSKEY protocol field needs to be 3")
+        raise ValueError("DNSKEY protocol field needs to be 3, it is " , dnskey_data["PROTOCOL"])
     dnskey_data["ALGORITHM"] = data[current_byte : current_byte + 1]
     current_byte+= 1
+    answer["RDATA"] = dnskey_data
+    return answer, current_byte
 
 def header_parser(data):
     header = {}
@@ -446,7 +448,7 @@ def parse(data):
 
 if __name__ == "__main__":
    
-    qname = 'DDDS'   
+    qname = 'DNSKEY'   
     ip = "8.8.8.8"
    
     #domain = "saep.io"
