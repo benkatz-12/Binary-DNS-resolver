@@ -2,7 +2,7 @@ import socket
 import struct, binascii, pprint
 
 dnssec = ["RRSIG", "DNSKEY", "DS", "NSEC", "NSEC3", "CDS", "CDNKEY"]
-OPT_rr = b''
+OPT_rr = b'000041100000800000'
 
 
 def udp_dns(ip, port, domain, qname):
@@ -12,8 +12,7 @@ def udp_dns(ip, port, domain, qname):
     #build question section
     question = format_question(domain)
     qtype = translate_qname(qname)
-    if qtype in dnssec:
-        additional = OPT_rr
+    
 
     #build full message
     header += question
@@ -23,6 +22,17 @@ def udp_dns(ip, port, domain, qname):
     qclass = b'0001'  #QCLASS: (1) for internet class
     header += qclass
    
+    if qtype in dnssec:
+        additional = OPT_rr
+        header = b'fedc01000001000000000001'
+        header += question
+        null = b'00' #null terminator at the end of the QNAME section
+        header += null
+        header += qtype
+        qclass = b'0001'  #QCLASS: (1) for internet class
+        header += qclass
+        header += additional
+
     qfull = binascii.unhexlify(header)
    
     data = None
@@ -104,58 +114,175 @@ def translate_qname(qname):
         'AAAA': b'001c',
         'KEY': b'0019', #not implemented + NO TEST CASES + NEED TEST CASES
         'SIG': b'0018', #not implemented + NO TEST CASES + NEED TEST CASES
-        'CERT': b'0025', #not implemented + MASSIVE RABBIT HOLE OF PARSING DIFFERENT CERTIFICATE TYPES??
-        'DS': b'002b', #not implemented + DNSSEC RABBIT HOLE
-        'SSHFP': b'002c', #not implemented+ DNSSEC RABBIT HOLE
+        'CERT': b'0025', #not implemented + NO TEST CASES + NEED TEST CASES
+        'DS': b'002b', 
+        'SSHFP': b'002c', #not implemented + DNSSEC RABBIT HOLE
         'IPSECKEY': b'002d', #not implemented
-        'RRSIG': b'002e', #not implemented+ DNSSEC RABBIT HOLE // Cloudflare.com
-        'NSEC': b'002f', #not implemented+ DNSSEC RABBIT HOLE
-        'DNSKEY': b'0030', #not implemented+ DNSSEC RABBIT HOLE // Cloudflare.com
+        'RRSIG': b'002e', #not implemented+ DNSSEC RABBIT HOLE //
+        'NSEC': b'002f',
+        'DNSKEY': b'0030', #not implemented+ DNSSEC RABBIT HOLE // Cloudflare.com  NEXT UP ASF;LASIJFAOW;IJFA;OIF
         'NSEC3': b'0032', #not implemented+ DNSSEC RABBIT HOLE
         'NSEC3PARAM': b'0033', #not implemented
         'TLSA': b'0034', #not implemented // Cloudflare.com
-        'CDS': b'003b', #not implemented // Cloudflare.com
-        'SVCB': b'0040', #not implemented // Cloudflare.com
-        'HTTPS': b'0041', #not implemented // Cloudflare.com
+        'CDS': b'003b',
+        'SVCB': b'0040', #not implemented
+        'HTTPS': b'0041', #not implemented // Cloudflare.com // not implemented with dig or host commands
         'TSIG': b'00fa', #not implemented //Cloudflare.com
         'CAA': b'0101' #not implemented
     }
     return qtranslator[qname]
 def type_translator(type):
     record_types = {
-        1 : 'A',
-        2 : 'NS',
-        5 : 'CNAME',
-        6 : 'SOA',
-        12 : 'PTR',
-        13 : 'HINFO',
-        15 : 'MX',
-        16 : 'TXT',
-        17 : 'RP',
-        24 : 'SIG',
-        25 : 'KEY',
-        28 : 'AAAA',
-        33 : 'SRV',
-        35 : 'NAPTR',
-        37 : 'CERT',
-        39 : 'DNAME',
-        43 : 'DS', #DNSSEC
-        44 : 'SSHFP',
-        45 : 'IPSECKEY',
-        46 : 'RRSIG', #DNSSEC
-        47 : 'NSEC', #DNSSEC
-        48 : 'DNSKEY', #DNSSEC
-        50 : 'NSEC3', #DNSSEC
-        51 : 'NSEC3PARAM',
-        52 : 'TSLA',
-        59 : 'CDS', #DNSSEC
-        64 : 'SVCB',
-        65 : 'HTTPS',
-        250 : 'TSIG',
-        257 : 'CAA'
+        0 : "NONE",
+        1 : "A",
+        2 : "NS",
+        3 : "MD",
+        4 : "MF",
+        5 : "CNAME",
+        6 : "SOA",
+        7 : "MB",
+        8 : "MG",
+        9 : "MR",
+        10 : "NULL",
+        11 : "WKS",
+        12 : "PTR",
+        13 : "HINFO",
+        14 : "MINFO",
+        15 : "MX",
+        16 : "TXT",
+        17 : "RP",
+        18 : "AFSDB",
+        19 : "X25",
+        20 : "ISDN",
+        21 : "RT",
+        22 : "NSAP",
+        23 : "NSAP_PTR",
+        24 : "SIG",
+        25 : "KEY",
+        26 : "PX",
+        27 : "GPOS",
+        28 : "AAAA",
+        29 : "LOC",
+        30 : "NXT",
+        31 : "EID",
+        32 : "NIMLOC",
+        33 : "SRV",
+        34 : "ATMA",
+        35 : "NAPTR",
+        36 : "KX",
+        37 : "CERT",
+        38 : "A6",
+        39 : "DNAME",
+        41 : "OPT",
+        42 : "APL",
+        43 : "DS",
+        44 : "SSHFP",
+        45 : "IPSECKEY",
+        46 : "RRSIG",
+        47 : "NSEC",
+        48 : "DNSKEY",
+        49 : "DHCID",
+        50 : "NSEC3",
+        51 : "NSEC3PARAM",
+        52 : "TLSA",
+        53 : "SMIMEA",
+        55 : "HIP",
+        56 : "NINFO",
+        57 : "RKEY",
+        58 : "TALINK",
+        59 : "CDS",
+        60 : "CDNSKEY",
+        61 : "OPENPGPKEY",
+        62 : "CSYNC",
+        63 : "ZONEMD",
+        64 : "SVCB",
+        65 : "HTTPS",
+        99 : "SPF",
+        100 : "UINFO",
+        101 : "UID",
+        102 : "GID",
+        103 : "UNSPEC",
+        104 : "NID",
+        105 : "L32",
+        106 : "L64",
+        107 : "LP",
+        108 : "EUI48",
+        109 : "EUI64",
+        249 : "TKEY",
+        250 : "TSIG",
+        251 : "IXFR",
+        252 : "AXFR",
+        253 : "MAILB",
+        254 : "MAILA",
+        255 : "ANY",
+        256 : "URI",
+        257 : "CAA",
+        258 : "AVC",
+        259 : "DOA",
+        260 : "AMTRELAY",
+        32768 : "TA",
+        32769 : "DLV"
     }
    
     return record_types.get(type)
+def translate_rcode(rcode):
+    codes = {
+        0 : "NoError",
+        1 : "FormErr",
+        2 : "ServFail",
+        3 : "NXDomain",
+        4 : "NotImp",
+        5 : "Refused",
+        6 : "YXDomain",
+        7 : "YXRRSet",
+        8 : "NXRRSet",
+        9 : "NotAuth",
+        10 : "NotZone",
+        11 : "DSOTYPENI",
+        16 : "BADVERS // BADSIG",
+        17 : "BADKEY",
+        18 : "BADTIME",
+        19 : "BADMODE",
+        20 : "BADNAME",
+        21 : "BADALG",
+        22 : "BADTRUNC",
+        23 : "BADCOOKIE"
+    }
+    return codes[int(rcode, 16)]
+def translate_algo_type(value):
+    algos = {
+        0 : "Delete DS",
+        1 : "RSA/MD5",
+        2 : "Diffie-Hellman",
+        3 : "DSA/SHA-1",
+        4 : "Elliptic Curve",
+        5 : "RSA/SHA-1",
+        6 : "DSA-NSEC3-SHA1",
+        7 : "RSASHA1-NSEC3-SHA1",
+        8 : "RSA/SHA-256",
+        9 : "reserved",
+        10 : "RSA/SHA-512",
+        11 : "reserved",
+        12 : "GOST R 34.10-2001",
+        13 : "ECDSA Curve P-256 with SHA-256",
+        14 : "ECDSA Curve P-384 with SHA-384",
+        15 : "Ed25519",
+        16 : "Ed448",
+        252 : "Indirect",
+        253 : "Private [DNS]",
+        254 : "Private [OID]",
+        255 : "Reserved"
+    }
+    return algos[value]
+def translate_digest_type(value):
+    digest = {
+        0 : "reserved",
+        1 : "SHA-1",
+        2 : "SHA-256",
+        3 : "GOST R 34.11-94",
+        4 : "SHA-384"
+    }
+    return digest[value]
 
 def parse_domain(current_byte, data):
     pointer = False
@@ -189,6 +316,24 @@ def parse_char_string(current_byte, data):
         txt += bytes.fromhex(data[current_byte : current_byte + 2]).decode("ascii")
         current_byte += 2
     return txt, current_byte
+def parse_type_bitmap(current_byte, data):
+    types = []
+    while True:
+        try:
+            window = int(data[current_byte : current_byte+2], 16)
+            current_byte += 2
+            data_len = int(data[current_byte : current_byte+2], 16)
+            current_byte += 2
+            bit_map = bin(int(data[current_byte : current_byte + data_len*2], 16))[2:].zfill(data_len*8)
+            current_byte += data_len*2
+            for i in range(len(bit_map)):
+                if bit_map[i] == '1':
+                    types.append(type_translator((window*256)+i))
+        except Exception as e:
+            break
+
+    
+    return types, current_byte
 
 def A_parse(data, current_byte, answer):
     for z in range(answer["RDLENGTH"]*2-4):
@@ -318,10 +463,46 @@ def DNSKEY_parse(data, current_byte, answer):
     dnskey_data["PROTOCOL"] = int(data[current_byte : current_byte + 1], 16)
     current_byte+= 1
     if dnskey_data["PROTOCOL"] != 3:
-        raise ValueError("DNSKEY protocol field needs to be 3, it is " , dnskey_data["PROTOCOL"])
+        ...
+        #raise ValueError("DNSKEY protocol field needs to be 3, it is " , dnskey_data["PROTOCOL"])
     dnskey_data["ALGORITHM"] = data[current_byte : current_byte + 1]
     current_byte+= 1
     answer["RDATA"] = dnskey_data
+    return answer, current_byte
+
+def DS_parse(data, current_byte, answer):
+    ds_data = {}
+    msg_len = int(data[current_byte - 4 : current_byte], 16)
+    ds_data["Key Tag"] = data[current_byte : current_byte + 4] #compute key tag in order to match to DNSKEY tag
+    current_byte += 4
+    ds_data["Algorithm"] = translate_algo_type(int(data[current_byte : current_byte + 2], 16)) + ' (' + str(int(data[current_byte : current_byte + 2], 16)) + ')'
+    current_byte += 2
+    ds_data["Digest Type"] = translate_digest_type(int(data[current_byte : current_byte + 2], 16)) + ' (' + str(int(data[current_byte : current_byte + 2], 16)) + ')'
+    current_byte += 2
+    ds_data["Digest"] = data[current_byte : current_byte + (msg_len-4)*2]
+    current_byte += (msg_len-4)*2
+    answer["RDATA"] = ds_data
+    return answer, current_byte
+
+def CDS_parse(data, current_byte, answer):
+    cds_data = {}
+    msg_len = int(data[current_byte - 4 : current_byte], 16)
+    cds_data["Key Tag"] = data[current_byte : current_byte + 4] #compute key tag in order to match to DNSKEY tag
+    current_byte += 4
+    cds_data["Algorithm"] = translate_algo_type(int(data[current_byte : current_byte + 2], 16)) + ' (' + str(int(data[current_byte : current_byte + 2], 16)) + ')'
+    current_byte += 2
+    cds_data["Digest Type"] = translate_digest_type(int(data[current_byte : current_byte + 2], 16)) + ' (' + str(int(data[current_byte : current_byte + 2], 16)) + ')'
+    current_byte += 2
+    cds_data["Digest"] = data[current_byte : current_byte + (msg_len-4)*2]
+    current_byte += (msg_len-4)*2
+    answer["RDATA"] = cds_data
+    return answer, current_byte
+
+def NSEC_parse(data, current_byte, answer):
+    nsec_data = {}
+    nsec_data["Next Domain Name"], current_byte = parse_domain(current_byte, data)
+    nsec_data["Types"], current_byte = parse_type_bitmap(current_byte, data)
+    answer["RDATA"] = nsec_data
     return answer, current_byte
 
 def header_parser(data):
@@ -338,7 +519,7 @@ def header_parser(data):
    
     header["RD"] = flags[7]
     header["RA"] = flags[8]
-    header["RCODE"] = int(flags[12:17])
+    header["RCODE"] = translate_rcode(flags[12:17])
     header["QDCOUNT"] = int(data[8:12])
     header["ANCOUNT"] = int(data[12:16])
     header["NSCOUNT"] = int(data[16:20])
@@ -380,7 +561,10 @@ def eval_rr(rtype):
     "SRV": SRV_parse,
     "NAPTR": NAPTR_parse,
     "DNAME": DNAME_parse,
-    "DNSKEY": DNSKEY_parse
+    "DNSKEY": DNSKEY_parse,
+    "DS" : DS_parse,
+    "CDS" : CDS_parse,
+    "NSEC" : NSEC_parse
     }
 
     func = d[rtype]
@@ -448,7 +632,7 @@ def parse(data):
 
 if __name__ == "__main__":
    
-    qname = 'DNSKEY'   
+    qname = 'NSEC'   
     ip = "8.8.8.8"
    
     #domain = "saep.io"
