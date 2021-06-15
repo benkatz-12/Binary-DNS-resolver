@@ -1,8 +1,8 @@
 import socket
-import struct, binascii, pprint
+import struct, binascii, pprint, base64
 
 dnssec = ["RRSIG", "DNSKEY", "DS", "NSEC", "NSEC3", "CDS", "CDNKEY"]
-OPT_rr = b'000041100000800000'
+OPT_rr = b'000029100000008000000c000a0008590570a0b9b0095c'
 
 
 def udp_dns(ip, port, domain, qname):
@@ -22,9 +22,9 @@ def udp_dns(ip, port, domain, qname):
     qclass = b'0001'  #QCLASS: (1) for internet class
     header += qclass
    
-    if qtype in dnssec:
+    if 1: #need some way of knowing when to send OPT psudosection
         additional = OPT_rr
-        header = b'fedc01000001000000000001'
+        header = b'fedc01200001000000000001'
         header += question
         null = b'00' #null terminator at the end of the QNAME section
         header += null
@@ -34,7 +34,7 @@ def udp_dns(ip, port, domain, qname):
         header += additional
 
     qfull = binascii.unhexlify(header)
-   
+
     data = None
 
     try:
@@ -118,9 +118,9 @@ def translate_qname(qname):
         'DS': b'002b', 
         'SSHFP': b'002c', #not implemented + DNSSEC RABBIT HOLE
         'IPSECKEY': b'002d', #not implemented
-        'RRSIG': b'002e', #not implemented+ DNSSEC RABBIT HOLE //
-        'NSEC': b'002f',
-        'DNSKEY': b'0030', #not implemented+ DNSSEC RABBIT HOLE // Cloudflare.com  NEXT UP ASF;LASIJFAOW;IJFA;OIF
+        'RRSIG': b'002e', 
+        'NSEC': b'002f', #issue with \000.cloud... being \x00.cloud...
+        'DNSKEY': b'0030', #base64 encoding issue
         'NSEC3': b'0032', #not implemented+ DNSSEC RABBIT HOLE
         'NSEC3PARAM': b'0033', #not implemented
         'TLSA': b'0034', #not implemented // Cloudflare.com
@@ -329,6 +329,7 @@ def parse_type_bitmap(current_byte, data):
             for i in range(len(bit_map)):
                 if bit_map[i] == '1':
                     types.append(type_translator((window*256)+i))
+            if(data[current_byte : current_byte+2] == 'c0'): break
         except Exception as e:
             break
 
@@ -456,17 +457,22 @@ def DNAME_parse(data, current_byte, answer):
     answer["RDATA"] = dname_data
     return answer, current_byte
 
-def DNSKEY_parse(data, current_byte, answer):
+def DNSKEY_parse(data, current_byte, answer): #base64 encoding not correct
     dnskey_data = {}
-    dnskey_data["FLAGS"] = data[current_byte : current_byte + 2] #flag 7 and flag 15
+    msg_len = int(data[current_byte - 4 : current_byte], 16)
+    flags = bin(int(data[current_byte : current_byte + 4], 16))[2:].zfill(16) #flag 7 and flag 15
+    dnskey_data["FLAGS"] = {}
+    dnskey_data["FLAGS"]["Zone Key"] = flags[7]
+    dnskey_data["FLAGS"]["Secure Entry Point"] = flags[15]
+    current_byte+= 4
+    dnskey_data["PROTOCOL"] = int(data[current_byte : current_byte + 2], 16)
     current_byte+= 2
-    dnskey_data["PROTOCOL"] = int(data[current_byte : current_byte + 1], 16)
-    current_byte+= 1
     if dnskey_data["PROTOCOL"] != 3:
-        ...
-        #raise ValueError("DNSKEY protocol field needs to be 3, it is " , dnskey_data["PROTOCOL"])
-    dnskey_data["ALGORITHM"] = data[current_byte : current_byte + 1]
-    current_byte+= 1
+        raise ValueError("DNSKEY protocol field needs to be 3, it is " , dnskey_data["PROTOCOL"])
+    dnskey_data["ALGORITHM"] = translate_algo_type(int(data[current_byte : current_byte + 2], 16)) + ' (' + str(int(data[current_byte : current_byte + 2], 16)) + ')'
+    current_byte+= 2
+    dnskey_data["PUBLIC KEY"] = base64.b64encode(data[current_byte : current_byte + (msg_len-4)*2].encode('ascii')).decode('ascii') #this is not right for some reaosn
+    current_byte += (msg_len-4)*2
     answer["RDATA"] = dnskey_data
     return answer, current_byte
 
@@ -503,6 +509,34 @@ def NSEC_parse(data, current_byte, answer):
     nsec_data["Next Domain Name"], current_byte = parse_domain(current_byte, data)
     nsec_data["Types"], current_byte = parse_type_bitmap(current_byte, data)
     answer["RDATA"] = nsec_data
+    return answer, current_byte
+
+def RRSIG_parse(data, current_byte, answer):
+    rrsig_data = {}
+    msg_len = int(data[current_byte - 4 : current_byte], 16)
+    rrsig_data["Type Covered"] = type_translator(int(data[current_byte : current_byte+4], 16))
+    current_byte += 4
+    rrsig_data["Algorithm"] = translate_algo_type(int(data[current_byte : current_byte + 2], 16)) + ' (' + str(int(data[current_byte : current_byte + 2], 16)) + ')'
+    current_byte += 2
+    rrsig_data["Labels"] = int(data[current_byte : current_byte+2], 16)
+    current_byte += 2
+    rrsig_data["Original TTL"] = int(data[current_byte : current_byte+8], 16)
+    current_byte += 8
+    rrsig_data["Signature Expiration"] = int(data[current_byte : current_byte+8], 16)#its a date since 00:00:00
+    current_byte += 8
+    rrsig_data["Signature Inception"] = int(data[current_byte : current_byte+8], 16) #its a date since 00:00:00
+    current_byte += 8
+    rrsig_data["Key Tag"] = data[current_byte : current_byte + 4] #compute key tag in order to match to DNSKEY tag
+    current_byte += 4
+    rrsig_data["Signer's Name"], current_byte = parse_domain(current_byte, data)
+    rrsig_data["Signature"] = data[current_byte : current_byte + (msg_len-34)*2] #need base64 encoding?
+    print(rrsig_data["Signature"])
+    current_byte += (msg_len-34)*2
+    answer["RDATA"] = rrsig_data
+    return answer, current_byte
+
+def OPT_parse(data, current_byte, answer):
+    current_byte += 22
     return answer, current_byte
 
 def header_parser(data):
@@ -564,7 +598,9 @@ def eval_rr(rtype):
     "DNSKEY": DNSKEY_parse,
     "DS" : DS_parse,
     "CDS" : CDS_parse,
-    "NSEC" : NSEC_parse
+    "NSEC" : NSEC_parse,
+    "RRSIG" : RRSIG_parse,
+    "OPT" : OPT_parse
     }
 
     func = d[rtype]
@@ -632,13 +668,14 @@ def parse(data):
 
 if __name__ == "__main__":
    
-    qname = 'NSEC'   
+    qname = 'SSHFP'   
     ip = "8.8.8.8"
    
     #domain = "saep.io"
     #domain = "twitch.tv"
     #domain = "test.quantreads.com"
     domain = "cloudflare.com"
+    #domain = "www.davispolk.com"
    
     port = 53
     udp_dns(ip, port, domain, qname)
